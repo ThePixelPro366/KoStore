@@ -37,7 +37,7 @@ koreader_store/
 - **Search & Filter**: Advanced search and filtering options
 
 ## Installation
-
+0. Make sure python is installed(https://www.python.org/downloads/)
 1. Click on Code then download zip
 2. Extract the zip and open it(until you see a lot of folders and files)
 3. Right click and press open a terminal here
@@ -141,6 +141,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
 
 
 
