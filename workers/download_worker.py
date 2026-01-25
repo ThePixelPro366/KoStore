@@ -3,13 +3,45 @@ Background Worker for Downloads
 """
 
 import logging
+import os
 import requests
 import shutil
+import tempfile
 import zipfile
 from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 logger = logging.getLogger(__name__)
+
+
+def find_plugin_root(base: Path) -> Path | None:
+    """
+    Find the root directory of a plugin within the given base path.
+    
+    Handles two plugin structure types:
+    1. Release ZIP - files directly in root (main.lua, _meta.lua)
+    2. Repository ZIP - files in subdirectories (foo.koplugin/)
+    
+    Args:
+        base: Base directory to search in
+        
+    Returns:
+        Path to plugin root directory, or None if not found
+    """
+    # Case 1: Release ZIP - files in root
+    if (base / "main.lua").exists() and (base / "_meta.lua").exists():
+        logger.info(f"Found plugin in root directory: {base}")
+        return base
+    
+    # Case 2: Repository ZIP - search recursively
+    for root, dirs, files in os.walk(base):
+        if "main.lua" in files and "_meta.lua" in files:
+            plugin_path = Path(root)
+            logger.info(f"Found plugin in subdirectory: {plugin_path}")
+            return plugin_path
+    
+    logger.warning(f"No valid plugin structure found in: {base}")
+    return None
 
 
 class DownloadWorker(QThread):
@@ -38,9 +70,8 @@ class DownloadWorker(QThread):
                     self.finished.emit(False, "Failed to download repository")
                     return
                 
-                # Save temporarily
-                temp_dir = Path("temp_download")
-                temp_dir.mkdir(exist_ok=True)
+                # Save temporarily with unique directory
+                temp_dir = Path(tempfile.mkdtemp(prefix="koreader_store_"))
                 zip_path = temp_dir / f"{repo}.zip"
                 
                 with open(zip_path, "wb") as f:
@@ -52,72 +83,33 @@ class DownloadWorker(QThread):
                 
                 self.progress.emit("Analyzing plugin structure...")
                 
-                # Find plugin directory by looking for main.lua and _meta.lua
-                plugin_dir = None
-                plugin_name = None
+                # Find plugin directory using robust detection
+                plugin_dir = find_plugin_root(temp_dir)
                 
-                # Search for directories containing main.lua and _meta.lua
-                for root_dir in temp_dir.glob("*"):
-                    if not root_dir.is_dir():
-                        continue
-                    
-                    main_lua = root_dir / "main.lua"
-                    meta_lua = root_dir / "_meta.lua"
-                    
-                    # Check if this directory contains both main.lua and _meta.lua
-                    if main_lua.exists() and meta_lua.exists():
-                        plugin_dir = root_dir
-                        plugin_name = root_dir.name
-                        logger.info(f"Found plugin directory: {plugin_dir} with main.lua and _meta.lua")
-                        break
-                    
-                    # Also check for .koplugin directories (fallback)
-                    for koplugin_dir in root_dir.rglob("*.koplugin"):
-                        if koplugin_dir.is_dir():
-                            koplugin_main = koplugin_dir / "main.lua"
-                            koplugin_meta = koplugin_dir / "_meta.lua"
-                            if koplugin_main.exists() and koplugin_meta.exists():
-                                plugin_dir = koplugin_dir
-                                plugin_name = koplugin_dir.name
-                                logger.info(f"Found .koplugin directory: {plugin_dir}")
-                                break
-                    if plugin_dir:
-                        break
-                
-                # If still not found, try to find any directory with main.lua
                 if not plugin_dir:
-                    for root_dir in temp_dir.glob("*"):
-                        if not root_dir.is_dir():
-                            continue
-                        
-                        main_lua = root_dir / "main.lua"
-                        if main_lua.exists():
-                            plugin_dir = root_dir
-                            plugin_name = root_dir.name
-                            logger.info(f"Found directory with main.lua: {plugin_dir}")
-                            break
+                    self.finished.emit(
+                        False,
+                        "No valid plugin structure found (main.lua/_meta.lua missing)"
+                    )
+                    return
                 
-                if plugin_dir:
-                    self.progress.emit("Installing...")
-                    
-                    # Create proper .koplugin directory name if needed
-                    if not plugin_name.endswith(".koplugin"):
-                        plugin_name = f"{plugin_name}.koplugin"
-                    
-                    target = Path(self.install_path) / "plugins" / plugin_name
-                    if target.exists():
-                        shutil.rmtree(target)
-                    shutil.copytree(plugin_dir, target)
-                    
-                    # Cleanup
-                    shutil.rmtree(temp_dir)
-                    
-                    if self.is_update:
-                        self.finished.emit(True, f"{repo} updated successfully!")
-                    else:
-                        self.finished.emit(True, f"{repo} installed successfully!")
+                plugin_name = plugin_dir.name
+                if not plugin_name.endswith(".koplugin"):
+                    plugin_name += ".koplugin"
+                
+                self.progress.emit("Installing...")
+                
+                target = Path(self.install_path) / "plugins" / plugin_name
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(plugin_dir, target)
+                
+                if self.is_update:
+                    success_msg = f"{repo} updated successfully!"
                 else:
-                    self.finished.emit(False, "No valid plugin structure found (missing main.lua and _meta.lua)")
+                    success_msg = f"{repo} installed successfully!"
+                
+                self.finished.emit(True, success_msg)
             
             elif self.item_type == "patch":
                 # Download individual patch file
@@ -140,3 +132,11 @@ class DownloadWorker(QThread):
         except Exception as e:
             logger.error(f"Error during installation: {e}")
             self.finished.emit(False, f"Error: {str(e)}")
+        finally:
+            # Cleanup temporary directory if it exists
+            if 'temp_dir' in locals() and temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.info(f"Cleaned up temporary directory: {temp_dir}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup temporary directory {temp_dir}: {cleanup_error}")
