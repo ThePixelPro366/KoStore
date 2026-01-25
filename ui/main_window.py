@@ -463,7 +463,7 @@ class KOReaderStore(QMainWindow):
                         logger.info("Loaded saved GitHub token")
                         return token
                     else:
-                        logger.error("Invalid Token Format")
+                        logger.warning("Invalid Token Format")
                         return None
         except Exception as e:
             logger.error(f"Failed to load token: {e}")
