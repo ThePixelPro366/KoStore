@@ -37,6 +37,12 @@ koreader_store/
 - **Search & Filter**: Advanced search and filtering options
 
 ## Installation
+
+**Windows**:
+1. Go to the releases tab and download the exe
+2. Run the exe(there might be a application not responding message just wait).
+
+
 0. Make sure python is installed(https://www.python.org/downloads/)
 1. Click on Code then download zip
 2. Extract the zip and open it(until you see a lot of folders and files)
@@ -141,6 +147,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
 
 
 
