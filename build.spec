@@ -11,7 +11,6 @@ a = Analysis(
     datas=[
         ('api', 'api'),
         ('services', 'services'),
-        ('ui', 'ui'),
         ('utils', 'utils'),
         ('workers', 'workers'),
     ],
@@ -26,7 +25,6 @@ a = Analysis(
         'utils.resource_paths',
         'utils.markdown',
         'ui.themes',
-        'ui.plugin_card',
         'ui.loading_overlay',
         'ui.readme_text_edit',
         'ui.patch_selection_dialog',
