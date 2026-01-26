@@ -1,4 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
@@ -15,7 +17,7 @@ a = Analysis(
     ],
     hiddenimports=[
         'PyQt6.QtCore',
-        'PyQt6.QtGui', 
+        'PyQt6.QtGui',
         'PyQt6.QtWidgets',
         'PyQt6.QtWebEngineWidgets',
         'PyQt6.QtWebEngineCore',
@@ -34,7 +36,7 @@ a = Analysis(
         'services.plugin_installer',
         'services.cache',
         'services.update_service',
-    ],
+    ] + collect_submodules('PyQt6'),  # auto-collect any PyQt6 submodules
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -55,6 +57,11 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Choose target_arch dynamically:
+# In GitHub Actions, we can replace this value before build
+# or create two .spec files: build-arm64.spec and build-x86_64.spec
+target_arch = os.environ.get('PYINSTALLER_TARGET_ARCH', None)
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -72,7 +79,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch=target_arch,  # set via environment variable in CI
     codesign_identity=None,
     entitlements_file=None,
     icon='icon.ico' if os.path.exists('icon.ico') else None,
