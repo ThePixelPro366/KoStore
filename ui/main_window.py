@@ -98,7 +98,6 @@ def detect_support_links(html_content, repo_url):
     return support_info
 
 from ui.themes import LIGHT_THEME, PRIMARY, SUCCESS, ERROR
-from ui.plugin_card import PluginCard
 from ui.loading_overlay import LoadingOverlay
 from ui.readme_text_edit import ReadmeTextEdit
 from ui.patch_selection_dialog import PatchSelectionDialog
@@ -622,6 +621,8 @@ border: 1px solid #fecaca;
                     if update_info.get("installed_version", "Unknown") != "Unknown":
                         has_update = True
             
+            # Lazy import to avoid PyInstaller circular import issues
+            from ui.plugin_card import PluginCard
             card = PluginCard(item, installed, has_update)
             card.install_clicked.connect(lambda data, has_update, t=item_type: self.install_item(data, t, has_update))
             card.details_clicked.connect(self.show_details)
