@@ -14,7 +14,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest-arm64, macos-latest-x86_64, ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -37,26 +37,32 @@ jobs:
 
       # 4️⃣ Build with PyInstaller
       - name: Build with PyInstaller
-        run: pyinstaller build.spec
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest-x86_64" ]]; then
+            # Build Intel macOS binary
+            pyinstaller build.spec --target-arch x86_64
+          elif [[ "${{ matrix.os }}" == "macos-latest-arm64" ]]; then
+            # Build Apple Silicon macOS binary
+            pyinstaller build.spec --target-arch arm64
+          else
+            # Windows / Linux build
+            pyinstaller build.spec
+          fi
+        shell: bash
 
       # 5️⃣ Zip the build output
-      # Windows
-      - name: Zip result (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Zip result
         run: |
-          Compress-Archive -Path dist\* -DestinationPath dist\KoStore-${{ matrix.os }}.zip
-
-      # macOS / Linux
-      - name: Zip result (macOS/Linux)
-        if: runner.os != 'Windows'
-        run: |
-          # Install zip on Linux if missing
-          if [ "$(uname)" = "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y zip
+          if [[ "${{ matrix.os }}" == "Windows" ]]; then
+            pwsh -Command "Compress-Archive -Path dist\* -DestinationPath dist\KoStore-${{ matrix.os }}.zip"
+          else
+            if [ "$(uname)" = "Linux" ]; then
+              sudo apt-get update && sudo apt-get install -y zip
+            fi
+            cd dist
+            zip -r KoStore-${{ matrix.os }}.zip *
           fi
-          cd dist
-          zip -r KoStore-${{ matrix.os }}.zip *
+        shell: bash
 
       # 6️⃣ Create GitHub Release
       - name: Create GitHub Release
