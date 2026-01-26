@@ -7,15 +7,22 @@ permissions:
   contents: write
 
 env:
-  # Unique tag per workflow run to avoid overwriting releases
   RELEASE_TAG: release-${{ github.run_number }}
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        arch: [x86_64, arm64]  # Only used for macOS
+        include:
+          - os: windows-latest
+            arch: x86_64
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: macos-latest
+            arch: x86_64
+          - os: macos-latest
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -32,35 +39,39 @@ jobs:
 
       # 3️⃣ Install dependencies
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       # 4️⃣ Build with PyInstaller
       - name: Build with PyInstaller
+        shell: bash
         run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
             echo "Building macOS binary for ${{ matrix.arch }}"
             export PYINSTALLER_TARGET_ARCH=${{ matrix.arch }}
             pyinstaller build.spec
           else
             pyinstaller build.spec
           fi
-        shell: bash
 
-      # 5️⃣ Zip the build output
+      # 5️⃣ Zip build output (OS-safe)
       - name: Zip result
+        shell: bash
         run: |
-          if [[ "${{ matrix.os }}" == "Windows" ]]; then
-            pwsh -Command "Compress-Archive -Path dist\* -DestinationPath dist/KoStore-${{ matrix.os }}-${{ matrix.arch }}.zip"
+          ZIP_NAME="KoStore-${{ runner.os }}-${{ matrix.arch }}.zip"
+
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            pwsh -Command "Compress-Archive -Path dist\\* -DestinationPath dist\\$ZIP_NAME"
           else
-            if [ "$(uname)" = "Linux" ]; then
-              sudo apt-get update && sudo apt-get install -y zip
+            if [[ "${{ runner.os }}" == "Linux" ]]; then
+              sudo apt-get update
+              sudo apt-get install -y zip
             fi
             cd dist
-            zip -r KoStore-${{ matrix.os }}-${{ matrix.arch }}.zip *
+            zip -r "$ZIP_NAME" *
           fi
-        shell: bash
 
       # 6️⃣ Create GitHub Release
       - name: Create GitHub Release
