@@ -14,8 +14,8 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        arch: [x86_64, arm64] # architecture matrix for macOS
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        arch: [x86_64, arm64]  # Only used for macOS
 
     runs-on: ${{ matrix.os }}
 
@@ -41,9 +41,9 @@ jobs:
         run: |
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "Building macOS binary for ${{ matrix.arch }}"
-            pyinstaller build.spec --target-arch ${{ matrix.arch }}
+            export PYINSTALLER_TARGET_ARCH=${{ matrix.arch }}
+            pyinstaller build.spec
           else
-            # Windows / Linux build
             pyinstaller build.spec
           fi
         shell: bash
@@ -52,7 +52,7 @@ jobs:
       - name: Zip result
         run: |
           if [[ "${{ matrix.os }}" == "Windows" ]]; then
-            pwsh -Command "Compress-Archive -Path dist\* -DestinationPath dist\KoStore-${{ matrix.os }}-${{ matrix.arch }}.zip"
+            pwsh -Command "Compress-Archive -Path dist\* -DestinationPath dist/KoStore-${{ matrix.os }}-${{ matrix.arch }}.zip"
           else
             if [ "$(uname)" = "Linux" ]; then
               sudo apt-get update && sudo apt-get install -y zip
