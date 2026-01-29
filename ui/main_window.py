@@ -518,7 +518,11 @@ class KOReaderStore(QMainWindow):
         msg_box.setText("The selected device appears to be connected using MTP (Media Transfer Protocol).")
         msg_box.setInformativeText(
             "MTP devices do not expose a real filesystem path, which means KoStore cannot access them directly.\n\n"
+<<<<<<< HEAD
             "Please use a local folder, SD card"
+=======
+            "Please use a local folder, SD card, or KOReader's WiFi transfer instead."
+>>>>>>> mtp-detection-feature
         )
         msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg_box.exec()
