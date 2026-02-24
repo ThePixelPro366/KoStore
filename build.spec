@@ -7,7 +7,6 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        ('api', 'api'),
         ('services', 'services'),
         ('ui', 'ui'),
         ('utils', 'utils'),
@@ -77,3 +76,4 @@ exe = EXE(
     entitlements_file=None,
     icon='icon.ico' if os.path.exists('icon.ico') else None,
 )
+
