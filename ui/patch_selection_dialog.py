@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QTextDocument
 
 from ui.themes import LIGHT_THEME, PRIMARY, SUCCESS, ERROR
-from api.github import GitHubAPI
+from services.appstore_service import AppStoreService
 from utils.markdown import convert_markdown_to_html
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class PatchDownloadWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
     
-    def __init__(self, api: GitHubAPI, patch_data: dict):
+    def __init__(self, api: AppStoreService, patch_data: dict):
         super().__init__()
         self.api = api
         self.patch_data = patch_data

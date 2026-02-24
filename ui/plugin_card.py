@@ -11,6 +11,7 @@ from PyQt6.QtGui import QColor
 class PluginCard(QFrame):
     """Widget for individual plugin card"""
     install_clicked = pyqtSignal(dict, bool)
+    uninstall_clicked = pyqtSignal(dict)
     details_clicked = pyqtSignal(dict)
     favorite_clicked = pyqtSignal(dict, bool)
     
@@ -202,22 +203,22 @@ line-height: 1.4;
         
         button_layout.addStretch()
         
-        # Install/Update button
+        # Install/Update/Uninstall button
         if self.installed:
             if self.has_update:
                 install_btn = QPushButton("⬆️ Update")
                 btn_color = "#f59e0b"
                 hover_color = "#d97706"
             else:
-                install_btn = QPushButton("✅ Installed")
-                btn_color = "#10b981"
-                hover_color = "#059669"
+                install_btn = QPushButton("🗑️ Uninstall")
+                btn_color = "#ef4444"
+                hover_color = "#dc2626"
         else:
             install_btn = QPushButton("⬇️ Install")
             btn_color = "#3b82f6"
             hover_color = "#2563eb"
         
-        install_btn.setEnabled(not self.installed or self.has_update)
+        install_btn.setEnabled(True)  # Always enable the button
         install_btn.setStyleSheet(f"""
 QPushButton {{
     background-color: {btn_color};
@@ -239,7 +240,11 @@ QPushButton:disabled {{
 }}
 """)
 
-        install_btn.clicked.connect(lambda: self.install_clicked.emit(self.data, self.has_update))
+        # Connect appropriate signal based on button type
+        if self.installed and not self.has_update:
+            install_btn.clicked.connect(lambda: self.uninstall_clicked.emit(self.data))
+        else:
+            install_btn.clicked.connect(lambda: self.install_clicked.emit(self.data, self.has_update))
         button_layout.addWidget(install_btn)
         
         layout.addLayout(button_layout)

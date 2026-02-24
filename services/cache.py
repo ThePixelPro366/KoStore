@@ -14,81 +14,121 @@ logger = logging.getLogger(__name__)
 class CacheService:
     """Service for caching plugin and patch data"""
     
-    def __init__(self, cache_file: str = "koreader_store_cache.json", cache_duration: timedelta = timedelta(weeks=4)):
-        self.cache_file = Path(cache_file)
+    def __init__(self, cache_duration: timedelta = timedelta(weeks=4)):
         self.cache_duration = cache_duration
-        self.cache_data = {}
+        self.plugin_cache_file = Path("appstore_cache_plugin.json")
+        self.patch_cache_file = Path("appstore_cache_patch.json")
+        self.plugin_cache_data = {}
+        self.patch_cache_data = {}
         
-        logger.info(f"Initializing cache service with file: {cache_file}")
+        logger.info("Initializing cache service with separate plugin and patch cache files")
         self.load_cache()
     
     def load_cache(self) -> bool:
         """
-        Load cache from file.
+        Load cache from separate plugin and patch files.
         
         Returns:
-            True if cache was loaded successfully, False otherwise
+            True if at least one cache was loaded successfully, False otherwise
         """
+        plugin_loaded = False
+        patch_loaded = False
+        
+        # Load plugin cache
         try:
-            if self.cache_file.exists():
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    self.cache_data = json.load(f)
+            if self.plugin_cache_file.exists():
+                with open(self.plugin_cache_file, 'r', encoding='utf-8') as f:
+                    self.plugin_cache_data = json.load(f)
                 
-                # Check if cache is expired
-                if self.is_cache_expired():
-                    logger.info("Cache expired, clearing cache")
-                    self.cache_data = {}
-                    return False
-                
-                logger.info(f"Cache loaded successfully. Plugins: {len(self.cache_data.get('plugins', []))}, Patches: {len(self.cache_data.get('patches', []))}")
-                return True
+                # Check if plugin cache is expired
+                if not self._is_cache_data_expired(self.plugin_cache_data):
+                    logger.info(f"Plugin cache loaded: {len(self.plugin_cache_data)} plugins")
+                    plugin_loaded = True
+                else:
+                    logger.info("Plugin cache expired, clearing")
+                    self.plugin_cache_data = {}
             else:
-                logger.info("No cache file found, starting with empty cache")
-                self.cache_data = {}
-                return False
-                
+                logger.info("No plugin cache file found")
+                self.plugin_cache_data = {}
         except Exception as e:
-            logger.error(f"Error loading cache: {e}")
-            self.cache_data = {}
-            return False
-    
-    def save_cache(self) -> bool:
-        """
-        Save cache to file.
+            logger.error(f"Error loading plugin cache: {e}")
+            self.plugin_cache_data = {}
         
-        Returns:
-            True if cache was saved successfully, False otherwise
-        """
+        # Load patch cache
         try:
-            # Add timestamp
-            self.cache_data['last_updated'] = datetime.now().isoformat()
-            
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.cache_data, f, indent=2, ensure_ascii=False)
-            
-            logger.info("Cache saved successfully")
-            return True
-            
+            if self.patch_cache_file.exists():
+                with open(self.patch_cache_file, 'r', encoding='utf-8') as f:
+                    self.patch_cache_data = json.load(f)
+                
+                # Check if patch cache is expired
+                if not self._is_cache_data_expired(self.patch_cache_data):
+                    logger.info(f"Patch cache loaded: {len(self.patch_cache_data)} patches")
+                    patch_loaded = True
+                else:
+                    logger.info("Patch cache expired, clearing")
+                    self.patch_cache_data = {}
+            else:
+                logger.info("No patch cache file found")
+                self.patch_cache_data = {}
         except Exception as e:
-            logger.error(f"Error saving cache: {e}")
-            return False
-    
-    def is_cache_expired(self) -> bool:
-        """
-        Check if cache is expired.
+            logger.error(f"Error loading patch cache: {e}")
+            self.patch_cache_data = {}
         
+        return plugin_loaded or patch_loaded
+    
+    def _is_cache_data_expired(self, cache_data: Dict[str, Any]) -> bool:
+        """
+        Check if specific cache data is expired.
+        
+        Args:
+            cache_data: Cache data dictionary to check
+            
         Returns:
             True if cache is expired, False otherwise
         """
-        if 'last_updated' not in self.cache_data:
+        if 'last_updated' not in cache_data:
             return True
         
         try:
-            last_updated = datetime.fromisoformat(self.cache_data['last_updated'])
+            last_updated = datetime.fromisoformat(cache_data['last_updated'])
             return datetime.now() - last_updated > self.cache_duration
         except Exception as e:
             logger.warning(f"Error checking cache expiration: {e}")
             return True
+    
+    def save_cache(self) -> bool:
+        """
+        Save cache to separate plugin and patch files.
+        
+        Returns:
+            True if both caches were saved successfully, False otherwise
+        """
+        plugin_saved = False
+        patch_saved = False
+        
+        # Save plugin cache
+        try:
+            if self.plugin_cache_data:
+                self.plugin_cache_data['last_updated'] = datetime.now().isoformat()
+                with open(self.plugin_cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.plugin_cache_data, f, indent=2, ensure_ascii=False)
+                plugin_saved = True
+                logger.info("Plugin cache saved successfully")
+        except Exception as e:
+            logger.error(f"Error saving plugin cache: {e}")
+        
+        # Save patch cache
+        try:
+            if self.patch_cache_data:
+                self.patch_cache_data['last_updated'] = datetime.now().isoformat()
+                with open(self.patch_cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.patch_cache_data, f, indent=2, ensure_ascii=False)
+                patch_saved = True
+                logger.info("Patch cache saved successfully")
+        except Exception as e:
+            logger.error(f"Error saving patch cache: {e}")
+        
+        return plugin_saved and patch_saved
     
     def get_plugins(self) -> list:
         """
@@ -97,7 +137,7 @@ class CacheService:
         Returns:
             List of cached plugins
         """
-        return self.cache_data.get('plugins', [])
+        return self.plugin_cache_data.get('repos', [])
     
     def get_patches(self) -> list:
         """
@@ -106,7 +146,7 @@ class CacheService:
         Returns:
             List of cached patches
         """
-        return self.cache_data.get('patches', [])
+        return self.patch_cache_data.get('repos', [])
     
     def set_plugins(self, plugins: list) -> None:
         """
@@ -115,7 +155,7 @@ class CacheService:
         Args:
             plugins: List of plugins to cache
         """
-        self.cache_data['plugins'] = plugins
+        self.plugin_cache_data['repos'] = plugins
         logger.info(f"Cached {len(plugins)} plugins")
     
     def set_patches(self, patches: list) -> None:
@@ -125,12 +165,18 @@ class CacheService:
         Args:
             patches: List of patches to cache
         """
-        self.cache_data['patches'] = patches
+        self.patch_cache_data['repos'] = patches
         logger.info(f"Cached {len(patches)} patches")
     
     def clear_cache(self) -> None:
         """Clear all cached data"""
-        self.cache_data = {}
+        self.plugin_cache_data = {}
+        self.patch_cache_data = {}
+        # Remove cache files
+        if self.plugin_cache_file.exists():
+            self.plugin_cache_file.unlink()
+        if self.patch_cache_file.exists():
+            self.patch_cache_file.unlink()
         logger.info("Cache cleared")
     
     def get_cache_info(self) -> Dict[str, Any]:
@@ -141,21 +187,24 @@ class CacheService:
             Dictionary with cache information
         """
         info = {
-            "cache_file": str(self.cache_file),
-            "cache_exists": self.cache_file.exists(),
-            "is_expired": self.is_cache_expired(),
+            "plugin_cache_file": str(self.plugin_cache_file),
+            "patch_cache_file": str(self.patch_cache_file),
+            "plugin_cache_exists": self.plugin_cache_file.exists(),
+            "patch_cache_exists": self.patch_cache_file.exists(),
             "plugins_count": len(self.get_plugins()),
             "patches_count": len(self.get_patches()),
-            "last_updated": self.cache_data.get('last_updated', 'Never')
+            "plugin_last_updated": self.plugin_cache_data.get('last_updated', 'Never'),
+            "patch_last_updated": self.patch_cache_data.get('last_updated', 'Never')
         }
         
-        if info["last_updated"] != 'Never':
-            try:
-                last_updated = datetime.fromisoformat(info["last_updated"])
-                info["last_updated"] = last_updated.strftime("%Y-%m-%d %H:%M:%S")
-                info["age_days"] = (datetime.now() - last_updated).days
-            except:
-                pass
+        # Format timestamps
+        for key in ['plugin_last_updated', 'patch_last_updated']:
+            if info[key] != 'Never':
+                try:
+                    last_updated = datetime.fromisoformat(info[key])
+                    info[key] = last_updated.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
         
         return info
     
@@ -194,6 +243,17 @@ class CacheService:
                 return plugin
         return None
     
+    def is_cache_expired(self) -> bool:
+        """
+        Check if any cache is expired.
+        
+        Returns:
+            True if either cache is expired, False otherwise
+        """
+        plugin_expired = self._is_cache_data_expired(self.plugin_cache_data)
+        patch_expired = self._is_cache_data_expired(self.patch_cache_data)
+        return plugin_expired or patch_expired
+    
     def get_favorites(self) -> set:
         """
         Get cached favorites.
@@ -201,7 +261,7 @@ class CacheService:
         Returns:
             Set of favorite plugin names
         """
-        return set(self.cache_data.get('favorites', []))
+        return set(self.plugin_cache_data.get('favorites', []))
     
     def set_favorites(self, favorites: set) -> None:
         """
@@ -210,7 +270,7 @@ class CacheService:
         Args:
             favorites: Set of favorite plugin names
         """
-        self.cache_data['favorites'] = list(favorites)
+        self.plugin_cache_data['favorites'] = list(favorites)
         logger.info(f"Cached {len(favorites)} favorites")
     
     def add_favorite(self, plugin_name: str) -> None:
