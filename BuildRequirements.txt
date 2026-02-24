@@ -1,0 +1,12 @@
+# KOReader Store Dependencies
+PyQt6>=6.5.0
+PyQt6-WebEngine>=6.5.0
+requests>=2.31.0
+pathlib2>=2.3.7; python_version < '3.4'
+markdown
+
+# Build dependencies
+pyinstaller>=5.0.0
+
+
+

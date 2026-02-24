@@ -53,7 +53,7 @@ koreader_store/
 
 4. Install dependencies:
    ```bash
-   pip install PyQt6 PyQt6-WebEngine requests markdown
+   pip install -r requirements.txt
    ```
 
 5. Run the application:
@@ -152,6 +152,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
 
 
 

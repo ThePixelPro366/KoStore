@@ -241,9 +241,7 @@ class KOReaderStore(QMainWindow):
         
 
         self.koreader_path = None
-
         self.plugin_installer = None
-
         self.plugins = []
 
         self.patches = []
@@ -960,6 +958,66 @@ class KOReaderStore(QMainWindow):
         """Handle WiFi connection button click"""
         dialog = SSHConnectionDialog(self.ssh_service, parent=self)
         dialog.connected.connect(self._on_device_path_selected)  # reuse existing handler
+    
+    def show_mtp_warning(self):
+        """Show user-friendly warning for MTP devices"""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle("Unsupported Device Detected")
+        msg_box.setText("The selected device appears to be connected using MTP (Media Transfer Protocol).")
+        msg_box.setInformativeText(
+            "MTP devices do not expose a real filesystem path, which means KoStore cannot access them directly.\n\n"
+            "Please use a local folder or SD Card instead."
+        )
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
+    
+    def prompt_device_selection(self, device_paths):
+        """Prompt user to select from multiple KOReader devices"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QPushButton
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Select KOReader Device")
+        dialog.setModal(True)
+        
+        layout = QVBoxLayout(dialog)
+        
+        label = QLabel("Multiple KOReader devices found. Please select one:")
+        layout.addWidget(label)
+        
+        list_widget = QListWidget()
+        for path in device_paths:
+            from pathlib import Path
+            path_name = Path(path).name
+            list_widget.addItem(f"{path_name} - {path}")
+        layout.addWidget(list_widget)
+        
+        buttons_layout = QHBoxLayout()
+        select_btn = QPushButton("Select")
+        cancel_btn = QPushButton("Cancel")
+        
+        def on_select():
+            current_row = list_widget.currentRow()
+            if current_row >= 0:
+                selected_path = device_paths[current_row]
+                self.koreader_path = selected_path
+                logger.info(f"User selected KOReader device: {self.koreader_path}")
+                self.update_device_status(True)
+                self.plugin_installer = PluginInstaller(str(self.koreader_path))
+                self.load_installed_plugins()
+                dialog.accept()
+        
+        select_btn.clicked.connect(on_select)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        buttons_layout.addWidget(select_btn)
+        buttons_layout.addWidget(cancel_btn)
+        layout.addLayout(buttons_layout)
+        
+        # Select first item by default
+        if list_widget.count() > 0:
+            list_widget.setCurrentRow(0)
+        
         dialog.exec()
 
     def _on_device_path_selected(self, koreader_path: str):
@@ -969,128 +1027,6 @@ class KOReaderStore(QMainWindow):
         self.plugin_installer = PluginInstaller(str(self.koreader_path), ssh=self.ssh_service)
         self.load_installed_plugins()
         logger.info(f"Connected via SSH to KOReader device: {self.koreader_path}")
-
-    def show_mtp_warning(self):
-
-        """Show user-friendly warning for MTP devices"""
-
-        msg_box = QMessageBox(self)
-
-        msg_box.setIcon(QMessageBox.Icon.Warning)
-
-        msg_box.setWindowTitle("Unsupported Device Detected")
-
-        msg_box.setText("The selected device appears to be connected using MTP (Media Transfer Protocol).")
-
-        msg_box.setInformativeText(
-
-            "MTP devices do not expose a real filesystem path, which means KoStore cannot access them directly.\n\n"
-
-            "Please use a local folder or SD Card instead."
-
-        )
-
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-
-        msg_box.exec()
-
-    
-
-    def prompt_device_selection(self, device_paths):
-
-        """Prompt user to select from multiple KOReader devices"""
-
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QPushButton
-
-        
-
-        dialog = QDialog(self)
-
-        dialog.setWindowTitle("Select KOReader Device")
-
-        dialog.setModal(True)
-
-        
-
-        layout = QVBoxLayout(dialog)
-
-        
-
-        label = QLabel("Multiple KOReader devices found. Please select one:")
-
-        layout.addWidget(label)
-
-        
-
-        list_widget = QListWidget()
-
-        for path in device_paths:
-
-            from pathlib import Path
-
-            path_name = Path(path).name
-
-            list_widget.addItem(f"{path_name} - {path}")
-
-        layout.addWidget(list_widget)
-
-        
-
-        buttons_layout = QHBoxLayout()
-
-        select_btn = QPushButton("Select")
-
-        cancel_btn = QPushButton("Cancel")
-
-        
-
-        def on_select():
-
-            current_row = list_widget.currentRow()
-
-            if current_row >= 0:
-
-                selected_path = device_paths[current_row]
-
-                self.koreader_path = selected_path
-
-                logger.info(f"User selected KOReader device: {self.koreader_path}")
-
-                self.update_device_status(True)
-
-                self.plugin_installer = PluginInstaller(str(self.koreader_path))
-
-                self.load_installed_plugins()
-
-                dialog.accept()
-
-        
-
-        select_btn.clicked.connect(on_select)
-
-        cancel_btn.clicked.connect(dialog.reject)
-
-        
-
-        buttons_layout.addWidget(select_btn)
-
-        buttons_layout.addWidget(cancel_btn)
-
-        layout.addLayout(buttons_layout)
-
-        
-
-        # Select first item by default
-
-        if list_widget.count() > 0:
-
-            list_widget.setCurrentRow(0)
-
-        
-
-        dialog.exec()
-
-    
 
     def update_device_status(self, connected):
 
