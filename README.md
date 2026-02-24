@@ -2,7 +2,7 @@
 
 A desktop application for automatic installation of plugins and patches to your KOReader device.
 
-**Still in Early Beta! Bugs are expected. Please report all issues under the ‘Issues’ tab!**
+**Please report all issues under the ‘Issues’ tab!**
 
 ## Project Structure
 
@@ -164,6 +164,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
 
 
 
