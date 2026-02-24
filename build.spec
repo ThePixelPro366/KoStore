@@ -27,7 +27,6 @@ a = Analysis(
         'ui.loading_overlay',
         'ui.readme_text_edit',
         'ui.patch_selection_dialog',
-        'api.github',
         'workers.download_worker',
         'services.device_detection',
         'services.plugin_installer',
@@ -76,4 +75,5 @@ exe = EXE(
     entitlements_file=None,
     icon='icon.ico' if os.path.exists('icon.ico') else None,
 )
+
 
