@@ -958,6 +958,7 @@ class KOReaderStore(QMainWindow):
         """Handle WiFi connection button click"""
         dialog = SSHConnectionDialog(self.ssh_service, parent=self)
         dialog.connected.connect(self._on_device_path_selected)  # reuse existing handler
+        dialog.exec()
     
     def show_mtp_warning(self):
         """Show user-friendly warning for MTP devices"""
