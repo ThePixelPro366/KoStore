@@ -4,6 +4,6 @@ tests/__pycache__/
 workers/__pycache__/
 *.pyc
 koreader_store.log
-koreader_store_cache.json
+appstore_cache_*.json
 koreader_store_token.json
 koreader_store_favorites.json
