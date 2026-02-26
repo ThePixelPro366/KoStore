@@ -7,3 +7,4 @@ koreader_store.log
 appstore_cache_*.json
 koreader_store_token.json
 koreader_store_favorites.json
+storage.json
