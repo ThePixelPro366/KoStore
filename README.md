@@ -2,7 +2,7 @@
 
 A desktop application for automatic installation of plugins and patches to your KOReader device.
 
-**Still in Early Beta! Bugs are expected. Please report all issues under the ‘Issues’ tab!**
+**Please report all issues under the ‘Issues’ tab!**
 
 ## Project Structure
 
@@ -93,9 +93,12 @@ koreader_store/
 - **patch_selection_dialog.py**: Dialog for selecting and managing patches
 - **readme_text_edit.py**: Custom text editor widget for displaying README content
 - **ssh_dialog.py**: Dialog for SSH connection configuration
+<<<<<<< HEAD
 
 ### API Layer (`api/`)
 - Currently empty - API integrations are handled within services
+=======
+>>>>>>> 3f3c184a86227540542fbe3a6bce21cf7e22d46e
 
 ### Workers (`workers/`)
 - **download_worker.py**: Background thread for downloading and installing plugins
@@ -124,9 +127,8 @@ The application follows a modular architecture with clear separation of concerns
 
 1. **UI Layer**: Pure presentation logic
 2. **Service Layer**: Business logic and data management
-3. **API Layer**: External integrations
-4. **Worker Layer**: Background operations
-5. **Utils Layer**: Reusable utilities
+3. **Worker Layer**: Background operations
+4. **Utils Layer**: Reusable utilities
 
 ## License
 
@@ -168,6 +170,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
 
 
 
