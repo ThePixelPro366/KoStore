@@ -39,7 +39,6 @@ except ImportError:
 class ConnectionError(OSError):
     """Raised when the SSH/SFTP connection cannot be established."""
 
-
 class NotConnectedError(RuntimeError):
     """Raised when an SFTP operation is attempted without an active connection."""
 

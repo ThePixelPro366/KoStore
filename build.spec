@@ -29,6 +29,7 @@ a = Analysis(
         'ui.readme_text_edit',
         'ui.patch_selection_dialog',
         'api.github',
+        'workers.workers',
         'workers.download_worker',
         'services.device_detection',
         'services.plugin_installer',

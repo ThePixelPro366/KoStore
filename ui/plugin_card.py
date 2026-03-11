@@ -15,14 +15,15 @@ class PluginCard(QFrame):
     details_clicked = pyqtSignal(dict)
     favorite_clicked = pyqtSignal(dict, bool)
     
-    def __init__(self, data, installed=False, has_update=False, version="", is_favorite=False):
+    def __init__(self, data, installed=False, has_update=False, version="", is_favorite=False, enable_shadow=True):
         super().__init__()
 
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setOffset(0, 6)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        self.setGraphicsEffect(shadow)
+        if enable_shadow:
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(24)
+            shadow.setOffset(0, 6)
+            shadow.setColor(QColor(0, 0, 0, 40))
+            self.setGraphicsEffect(shadow)
 
         self.data = data
         self.installed = installed
@@ -49,15 +50,16 @@ class PluginCard(QFrame):
             border_color = "#3b82f6"
             accent_color = "#3b82f6"
         
-        self.setStyleSheet("""
-QFrame {
+        self.setStyleSheet(f"""
+PluginCard {{
     background-color: #ffffff;
+    border: 2px solid {border_color};
     border-radius: 18px;
-}
+}}
 
-QFrame:hover {
+PluginCard:hover {{
     background-color: #f8fafc;
-}
+}}
 """)
 
         

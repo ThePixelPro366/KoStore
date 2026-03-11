@@ -65,7 +65,7 @@ class PluginInstaller:
     # ------------------------------------------------------------------
 
     def install_plugin_from_zip(
-        self, zip_content: bytes, repo_name: str
+        self, zip_content: bytes, repo_name: str, progress_callback=None, atomic=True
     ) -> Dict[str, Any]:
         """
         Install a plugin from raw ZIP bytes.
@@ -107,11 +107,56 @@ class PluginInstaller:
             dest = f"{self.plugins_path}/{plugin_name}"
 
             if self._ssh is not None:
-                if self._ssh.is_dir(dest):
-                    logger.info("Removing existing plugin: %s", dest)
-                    self._sftp_rmtree(dest)
-                logger.info("Uploading plugin to: %s", dest)
-                self._sftp_upload_tree(plugin_dir, dest)
+                if atomic:
+                    # Atomic install: upload to temp directory first
+                    temp_dest = f"{self.plugins_path}/.{plugin_name}.tmp"
+                    backup_dest = f"{self.plugins_path}/.{plugin_name}.bak"
+                    
+                    try:
+                        # Clean up any previous failed attempts
+                        if self._ssh.is_dir(temp_dest):
+                            self._sftp_rmtree(temp_dest)
+                        if self._ssh.is_dir(backup_dest):
+                            self._sftp_rmtree(backup_dest)
+                        
+                        # If plugin exists, create backup
+                        if self._ssh.is_dir(dest):
+                            logger.info("Creating backup of existing plugin: %s", dest)
+                            self._sftp_rename_recursive(dest, backup_dest)
+                        
+                        # Upload to temporary location
+                        logger.info("Uploading plugin to temporary location: %s", temp_dest)
+                        self._sftp_upload_tree(plugin_dir, temp_dest, progress_callback)
+                        
+                        # Verify the upload
+                        if not self._verify_plugin_upload(temp_dest, plugin_dir):
+                            raise RuntimeError("Plugin verification failed after upload")
+                        
+                        # Atomic rename to final location
+                        logger.info("Committing plugin installation: %s", dest)
+                        self._ssh.rename(temp_dest, dest)
+                        
+                        # Remove backup if successful
+                        if self._ssh.is_dir(backup_dest):
+                            self._sftp_rmtree(backup_dest)
+                            
+                    except Exception as e:
+                        # Rollback: restore backup if it exists
+                        logger.error("Plugin installation failed, attempting rollback: %s", e)
+                        if self._ssh.is_dir(backup_dest):
+                            if self._ssh.is_dir(dest):
+                                self._sftp_rmtree(dest)
+                            self._ssh.rename(backup_dest, dest)
+                        if self._ssh.is_dir(temp_dest):
+                            self._sftp_rmtree(temp_dest)
+                        raise e
+                else:
+                    # Non-atomic install (original behavior)
+                    if self._ssh.is_dir(dest):
+                        logger.info("Removing existing plugin: %s", dest)
+                        self._sftp_rmtree(dest)
+                    logger.info("Uploading plugin to: %s", dest)
+                    self._sftp_upload_tree(plugin_dir, dest, progress_callback)
             else:
                 dest_path = Path(dest)
                 if dest_path.exists():
@@ -299,15 +344,65 @@ class PluginInstaller:
                 return d
         return None
 
-    def _sftp_upload_tree(self, local_dir: Path, remote_dir: str) -> None:
+    def _sftp_upload_tree(self, local_dir: Path, remote_dir: str, progress_callback=None) -> None:
         """Recursively upload a local directory tree via SFTP."""
+        # Count total files for progress tracking
+        total_files = 0
+        uploaded_files = 0
+        
+        if progress_callback:
+            for item in local_dir.rglob("*"):
+                if item.is_file():
+                    total_files += 1
+        
         self._ssh.makedirs(remote_dir)
         for item in local_dir.iterdir():
             remote_item = f"{remote_dir}/{item.name}"
             if item.is_dir():
-                self._sftp_upload_tree(item, remote_item)
+                self._sftp_upload_tree(item, remote_item, progress_callback)
             else:
+                if progress_callback and total_files > 0:
+                    # Use file size for more accurate progress
+                    file_size = item.stat().st_size
+                    # Simple progress based on file count
+                    uploaded_files += 1
+                    progress_callback(uploaded_files, total_files)
+                
                 self._ssh.put(item, remote_item)
+
+    def _sftp_rename_recursive(self, old_path: str, new_path: str) -> None:
+        """Recursively rename/move a remote directory."""
+        # SFTP rename can move directories atomically
+        self._ssh.rename(old_path, new_path)
+    
+    def _verify_plugin_upload(self, remote_path: str, local_path: Path) -> bool:
+        """Verify that the uploaded plugin matches the local source."""
+        try:
+            # Check that main.lua exists
+            if not self._ssh.exists(f"{remote_path}/main.lua"):
+                logger.error("Verification failed: main.lua not found")
+                return False
+            
+            # Check that _meta.lua exists  
+            if not self._ssh.exists(f"{remote_path}/_meta.lua"):
+                logger.error("Verification failed: _meta.lua not found")
+                return False
+            
+            # Count files to ensure everything uploaded
+            local_files = sum(1 for _ in local_path.rglob("*") if _.is_file())
+            remote_files = sum(1 for _ in self._ssh.walk(remote_path) 
+                             for _ in _[2] if self._ssh.exists(f"{_[0]}/{_}"))
+            
+            if local_files != remote_files:
+                logger.error(f"Verification failed: file count mismatch (local: {local_files}, remote: {remote_files})")
+                return False
+            
+            logger.info("Plugin verification successful: %d files", local_files)
+            return True
+            
+        except Exception as e:
+            logger.error("Plugin verification error: %s", e)
+            return False
 
     def _sftp_rmtree(self, remote_path: str) -> None:
         """Recursively delete a remote directory tree via SFTP."""

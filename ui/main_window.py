@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 
 from PyQt6.QtWidgets import (
 
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QApplication,
 
     QLineEdit, QTabWidget, QComboBox, QMessageBox, QProgressDialog, 
 
@@ -201,13 +201,12 @@ from ui.themes import LIGHT_THEME, PRIMARY, SUCCESS, ERROR
 from ui.plugin_card import PluginCard
 
 from ui.loading_overlay import LoadingOverlay
+from ui.progress_dialog import TransferProgressDialog as ProgressDialog
+from ui.known_devices_dialog import KnownDevicesDialog
+from ui.connection_diagnostics_dialog import ConnectionDiagnosticsDialog
+from ui.operations_manager_dialog import OperationsManagerDialog
 
-from ui.readme_text_edit import ReadmeTextEdit
-
-from ui.patch_selection_dialog import PatchSelectionDialog
-from ui.ssh_dialog import SSHConnectionDialog
-
-from workers.download_worker import DownloadWorker
+from workers.workers import DownloadWorker, DataFetchWorker, DeviceDetectionWorker
 
 from services.device_detection import DeviceDetection
 from services.plugin_installer import PluginInstaller
@@ -316,65 +315,43 @@ class KOReaderStore(QMainWindow):
 
         QTimer.singleShot(100, self.background_init)
 
+        self._data_fetch_worker = None
+        self._device_detection_worker = None
+        self._loading_counter = 0
+        self._display_jobs = {}
+        self._display_batch_size = 30
+
     
 
     def background_init(self):
-
         """Background initialization to avoid blocking UI"""
-
         try:
-
             logger.info("Starting background initialization")
 
+            self._begin_loading()
+            QApplication.processEvents()
             
-
-            # Show loading overlay
-
-            self.loading_overlay.show_loading(self)
-
-            
-
             # Load cache first
-
             logger.info("Loading cached data")
-
             if self.cache_service.get_plugins() and self.cache_service.get_patches():
-
                 logger.info("Using cached data, displaying items")
-
                 self.plugins = self.cache_service.get_plugins()
-
                 self.patches = self.cache_service.get_patches()
-
                 self.display_items(self.plugins, self.plugins_layout, "plugin")
-
                 self.display_items(self.patches, self.patches_layout, "patch")
 
-            
-
-            # Device detection
-
+            # Device detection (async)
             logger.info("Detecting KOReader devices")
+            self._start_device_detection()
 
-            self.detect_koreader_device()
-
-            
-
-            # Load fresh data if cache is empty or expired
-
+            # Load fresh data if cache is empty or expired (async)
             if not self.plugins or not self.patches:
-
                 logger.info("No cached data available, fetching from GitHub")
-
-                self.load_data()
-
-            
-
-            # Hide loading screen
-
-            self.loading_overlay.hide_loading()
+                self.load_data(force_refresh=True)
 
             logger.info("Background initialization completed")
+
+            self._end_loading()
 
             
 
@@ -382,9 +359,57 @@ class KOReaderStore(QMainWindow):
 
             logger.error(f"Error during background initialization: {e}")
 
+            self._loading_counter = 0
             self.loading_overlay.hide_loading()
 
             QMessageBox.critical(self, "Error", f"Failed to initialize: {e}")
+
+    def _begin_loading(self):
+        self._loading_counter += 1
+        if self._loading_counter == 1:
+            self.loading_overlay.show_loading(self)
+
+    def _end_loading(self):
+        if self._loading_counter <= 0:
+            self._loading_counter = 0
+            return
+
+        self._loading_counter -= 1
+        if self._loading_counter == 0:
+            QTimer.singleShot(250, self.loading_overlay.hide_loading)
+
+    def _start_device_detection(self):
+        if self._device_detection_worker and self._device_detection_worker.isRunning():
+            return
+
+        self._begin_loading()
+        QApplication.processEvents()
+
+        self._device_detection_worker = DeviceDetectionWorker(self.device_detection)
+        self._device_detection_worker.finished.connect(self._on_device_detection_finished)
+        self._device_detection_worker.start()
+
+    def _on_device_detection_finished(self, koreader_path, error_message):
+        try:
+            if error_message:
+                logger.error(f"Error during device detection: {error_message}")
+                self.update_device_status(False)
+                return
+
+            if koreader_path:
+                if isinstance(koreader_path, list):
+                    self.prompt_device_selection(koreader_path)
+                else:
+                    self.koreader_path = koreader_path
+                    logger.info(f"Selected KOReader device: {self.koreader_path}")
+                    self.update_device_status(True)
+                    self.plugin_installer = PluginInstaller(str(self.koreader_path))
+                    self.load_installed_plugins()
+            else:
+                logger.info("No KOReader devices detected")
+                self.update_device_status(False)
+        finally:
+            self._end_loading()
 
     
 
@@ -619,6 +644,10 @@ class KOReaderStore(QMainWindow):
 
         self.search_input = QLineEdit()
 
+        self._filter_debounce_timer = QTimer(self)
+        self._filter_debounce_timer.setSingleShot(True)
+        self._filter_debounce_timer.timeout.connect(self.filter_items)
+
         self.search_input.setPlaceholderText("Search plugins and patches...")
 
         self.search_input.setStyleSheet("""
@@ -637,7 +666,7 @@ class KOReaderStore(QMainWindow):
 
         """)
 
-        self.search_input.textChanged.connect(self.filter_items)
+        self.search_input.textChanged.connect(lambda: self._filter_debounce_timer.start(150))
 
         search_layout.addWidget(self.search_input)
 
@@ -808,7 +837,7 @@ class KOReaderStore(QMainWindow):
 
         refresh_btn.setObjectName("refreshBtn")
 
-        refresh_btn.clicked.connect(lambda: self.load_data(force_refresh=True))
+        refresh_btn.clicked.connect(self.refresh_data)
 
         filter_chips.addWidget(refresh_btn)
 
@@ -958,6 +987,7 @@ class KOReaderStore(QMainWindow):
         """Handle WiFi connection button click"""
         dialog = SSHConnectionDialog(self.ssh_service, parent=self)
         dialog.connected.connect(self._on_device_path_selected)  # reuse existing handler
+        dialog.exec()
     
     def show_mtp_warning(self):
         """Show user-friendly warning for MTP devices"""
@@ -1112,13 +1142,43 @@ border: 1px solid #fecaca;
             self.installed_plugins.add(plugin_name)
 
         
-
         logger.info(f"Loaded {len(self.installed_plugins)} installed plugins")
 
-    
+    def refresh_data(self):
+        """Refresh plugins and patches from GitHub."""
+        self.load_data(force_refresh=True)
+
+    def _start_data_fetch(self):
+        if self._data_fetch_worker and self._data_fetch_worker.isRunning():
+            return
+
+        self._begin_loading()
+        QApplication.processEvents()
+
+        self._data_fetch_worker = DataFetchWorker(self.appstore_service, self.cache_service)
+        self._data_fetch_worker.finished.connect(self._on_data_fetch_finished)
+        self._data_fetch_worker.start()
+
+    def _on_data_fetch_finished(self, ok, plugins, patches, error_message):
+        try:
+            if ok:
+                self.plugins = plugins
+                self.patches = patches
+                self.display_items(self.plugins, self.plugins_layout, "plugin")
+                self.display_items(self.patches, self.patches_layout, "patch")
+                logger.info(f"Successfully loaded {len(self.plugins)} plugins and {len(self.patches)} patches")
+            else:
+                logger.error(f"Error loading data: {error_message}")
+                QMessageBox.warning(
+                    self,
+                    "Warning",
+                    "Failed to load data. Please check your internet connection.",
+                )
+        finally:
+            self._end_loading()
 
     def load_data(self, force_refresh=False):
-        """Load plugins and patches from GitHub with caching"""
+        """Load plugins and patches from GitHub with caching."""
         if not force_refresh and not self.cache_service.is_cache_expired():
             logger.info("Using cached data")
             self.plugins = self.cache_service.get_plugins()
@@ -1126,34 +1186,9 @@ border: 1px solid #fecaca;
             self.display_items(self.plugins, self.plugins_layout, "plugin")
             self.display_items(self.patches, self.patches_layout, "patch")
             return
-        
+
         logger.info("Loading data from GitHub using AppStore service")
-        
-        try:
-            # Load plugins using AppStore service
-            self.plugins = self.appstore_service.fetch_repositories("plugin")
-            
-            # Load patches using AppStore service
-            raw_patches = self.appstore_service.fetch_repositories("patch")
-            
-            # Filter patch repositories to only include actual patch repos
-            self.patches = self.appstore_service.filter_patch_repos_only(raw_patches)
-            
-            # Display items
-            self.display_items(self.plugins, self.plugins_layout, "plugin")
-            self.display_items(self.patches, self.patches_layout, "patch")
-            
-            # Save to cache
-            self.cache_service.update_cache(self.plugins, self.patches)
-            
-            logger.info(f"Successfully loaded {len(self.plugins)} plugins and {len(self.patches)} patches")
-            
-        except Exception as e:
-            logger.error(f"Error loading data: {e}")
-
-            QMessageBox.warning(self, "Warning", 
-
-                "Failed to load data. Please check your internet connection.")
+        self._start_data_fetch()
 
     
 
@@ -1170,6 +1205,19 @@ border: 1px solid #fecaca;
             if child.widget():
 
                 child.widget().deleteLater()
+
+        if len(items) > 120:
+            job_id = id(layout)
+            self._display_jobs[job_id] = {
+                "items": list(items),
+                "layout": layout,
+                "item_type": item_type,
+                "row": 0,
+                "col": 0,
+                "index": 0,
+            }
+            QTimer.singleShot(0, lambda j=job_id: self._render_items_batch(j))
+            return
 
         
 
@@ -1227,7 +1275,7 @@ border: 1px solid #fecaca;
 
             is_favorite = item_name in self.favorites
 
-            card = PluginCard(item, installed, has_update, is_favorite=is_favorite)
+            card = PluginCard(item, installed, has_update, is_favorite=is_favorite, enable_shadow=True)
 
             card.install_clicked.connect(lambda data, has_update, t=item_type: self.install_item(data, t, has_update))
 
@@ -1254,6 +1302,67 @@ border: 1px solid #fecaca;
         # Add stretch at bottom
 
         layout.setRowStretch(row + 1, 1)
+
+    def _render_items_batch(self, job_id: int):
+        job = self._display_jobs.get(job_id)
+        if not job:
+            return
+
+        items = job["items"]
+        layout = job["layout"]
+        item_type = job["item_type"]
+
+        row = job["row"]
+        col = job["col"]
+        i = job["index"]
+
+        end = min(i + self._display_batch_size, len(items))
+        while i < end:
+            item = items[i]
+
+            item_name = item.get("name") or "Unknown"
+            installed = item_name in self.installed_plugins
+
+            updates = self.cached_updates if hasattr(self, 'cached_updates') else {}
+
+            has_update = False
+            if installed and item_name in updates:
+                update_info = updates[item_name]
+                if update_info.get("installed_version", "Unknown") != "Unknown":
+                    has_update = True
+            elif installed:
+                clean_name = item_name.replace(".koplugin", "")
+                if clean_name in updates:
+                    update_info = updates[clean_name]
+                    if update_info.get("installed_version", "Unknown") != "Unknown":
+                        has_update = True
+
+            is_favorite = item_name in self.favorites
+            card = PluginCard(item, installed, has_update, is_favorite=is_favorite, enable_shadow=False)
+            card.install_clicked.connect(lambda data, has_update, t=item_type: self.install_item(data, t, has_update))
+            card.uninstall_clicked.connect(lambda data, t=item_type: self.uninstall_item(data, t))
+            card.details_clicked.connect(self.show_details)
+            card.favorite_clicked.connect(self.toggle_favorite)
+            layout.addWidget(card, row, col)
+
+            col += 1
+            if col >= 3:
+                col = 0
+                row += 1
+
+            i += 1
+
+        job["row"] = row
+        job["col"] = col
+        job["index"] = i
+
+        layout.setRowStretch(row + 1, 1)
+
+        if i >= len(items):
+            self._display_jobs.pop(job_id, None)
+            return
+
+        QTimer.singleShot(0, lambda j=job_id: self._render_items_batch(j))
 
     
 
@@ -1424,84 +1533,42 @@ border: 1px solid #fecaca;
     
 
     def check_for_updates(self):
-
         """Check for updates manually when button is clicked"""
-
         if not self.installed_plugins or not self.update_service:
-
             QMessageBox.information(self, "Info", "No installed plugins found or update service not available.")
-
             return
-
         
-
+        # Show loading overlay
+        self.loading_overlay.show_loading(self)
+        logging.info("Checking for plugin updates...")
+        
         try:
-
-            # Show progress dialog
-
-            progress = QProgressDialog(self)
-
-            progress.setWindowTitle("Checking for Updates")
-
-            progress.setLabelText("Checking for plugin updates...")
-
-            progress.setCancelButton(None)
-
-            progress.setRange(0, 0)
-
-            progress.setWindowModality(Qt.WindowModality.WindowModal)
-
-            progress.show()
-
-            
-
             # Get detailed installed plugins info
-
             installed_plugins_info = {}
-
             if self.plugin_installer:
-
                 installed_plugins_info = self.plugin_installer.get_installed_plugins()
-
             
-
             # Check for updates
-
             self.cached_updates = self.update_service.check_for_updates(installed_plugins_info, self.plugins)
-
             
-
-            progress.close()
-
-            
-
             update_count = len(self.cached_updates)
-
+            logging.info(f"Update check completed. Found {update_count} updates.")
+            
             if update_count > 0:
-
                 QMessageBox.information(self, "Updates Available", 
-
                     f"Found updates for {update_count} plugin(s)!\n\nPlugins with updates will show an update badge.")
-
             else:
-
                 QMessageBox.information(self, "No Updates", "All plugins are up to date!")
-
             
-
             # Refresh display to show update badges
-
             self.filter_items()
-
             
-
         except Exception as e:
-
-            progress.close()
-
             logger.error(f"Error checking for updates: {e}")
-
-            QMessageBox.critical(self, "Error", f"Failed to check for updates:\n{e}")
+            QMessageBox.warning(self, "Error", f"Failed to check for updates: {e}")
+        finally:
+            # Hide loading overlay
+            QTimer.singleShot(500, self.loading_overlay.hide_loading)
 
     
 

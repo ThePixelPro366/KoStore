@@ -13,16 +13,22 @@ koreader_store/
 │   ├── main_window.py      # Main application window
 │   ├── plugin_card.py      # Plugin card widget
 │   ├── themes.py           # UI themes and design tokens
-│   └── loading_overlay.py  # Loading screen overlay
-├── api/                    # External API integrations
-│   └── github.py          # GitHub API handler
+│   ├── loading_overlay.py  # Loading screen overlay
+│   ├── patch_selection_dialog.py  # Patch selection dialog
+│   ├── readme_text_edit.py # README text editor widget
+│   └── ssh_dialog.py       # SSH connection dialog
 ├── workers/                # Background workers
+│   ├── __init__.py        # Worker package initialization
 │   └── download_worker.py # Download and installation worker
 ├── services/               # Business logic services
 │   ├── device_detection.py # KOReader device detection
 │   ├── plugin_installer.py # Plugin installation service
-│   └── cache.py          # Caching service
+│   ├── cache.py          # Caching service
+│   ├── appstore_service.py # App store service for fetching data
+│   ├── ssh_connection.py  # SSH connection service
+│   └── update_service.py   # Update checking service
 └── utils/                  # Utility functions
+    ├── __init__.py        # Utils package initialization
     ├── markdown.py        # Markdown to HTML conversion
     └── versioning.py     # Version comparison utilities
 ```
@@ -30,11 +36,13 @@ koreader_store/
 ## Features
 
 - **Plugin Management**: Browse, install, and update KOReader plugins
-- **Patch Management**: Download and install KOReader patches
+- **Patch Management**: Download and install KOReader patches with selection dialog
 - **Device Detection**: Automatically detect KOReader devices
+- **SSH Support**: Connect to remote KOReader devices via SSH
 - **Caching**: Local caching for faster loading
 - **Theme Support**: Light and dark themes
 - **Search & Filter**: Advanced search and filtering options
+- **Update Checking**: Automatic checking for application updates
 
 ## Installation
 
@@ -66,12 +74,14 @@ koreader_store/
 ## Usage
 
 1. **Device Connection**: The app will automatically detect KOReader devices, or you can manually select the path
-2. **Browse Plugins**: Use the search and filter options to find plugins
-3. **Install**: Click the install button on any plugin card
-4. **Updates**: The app will show available updates for installed plugins
-5. **Manual path**: Use this option if your device or path isn’t automatically detected. Select the main KOReader folder — the one that contains the plugins (and patches) folders.
+2. **SSH Connection**: Use SSH to connect to remote KOReader devices by configuring connection details
+3. **Browse Plugins**: Use the search and filter options to find plugins
+4. **Install**: Click the install button on any plugin card
+5. **Updates**: The app will show available updates for installed plugins
+6. **Patch Management**: Use the patch selection dialog to choose and install specific patches
+7. **Manual path**: Use this option if your device or path isn't automatically detected. Select the main KOReader folder — the one that contains the plugins (and patches) folders.
   
-7. **Tip: The Check for Updates can take some time be patient!**
+8. **Tip: The Check for Updates can take some time be patient!**
 
 ## Architecture
 
@@ -80,9 +90,12 @@ koreader_store/
 - **plugin_card.py**: Individual plugin card widget for displaying plugin information
 - **themes.py**: Design tokens and theme definitions (light/dark mode)
 - **loading_overlay.py**: Loading screen overlay for better UX
+- **patch_selection_dialog.py**: Dialog for selecting and managing patches
+- **readme_text_edit.py**: Custom text editor widget for displaying README content
+- **ssh_dialog.py**: Dialog for SSH connection configuration
 
 ### API Layer (`api/`)
-- **github.py**: GitHub API integration for fetching plugins and patches
+- Currently empty - API integrations are handled within services
 
 ### Workers (`workers/`)
 - **download_worker.py**: Background thread for downloading and installing plugins
@@ -91,6 +104,9 @@ koreader_store/
 - **device_detection.py**: Cross-platform KOReader device detection
 - **plugin_installer.py**: Plugin installation and management logic
 - **cache.py**: Local caching service for offline functionality
+- **appstore_service.py**: Service for fetching and managing app store data
+- **ssh_connection.py**: SSH connection management service
+- **update_service.py**: Service for checking application updates
 
 ### Utils (`utils/`)
 - **markdown.py**: Markdown to HTML conversion for README display

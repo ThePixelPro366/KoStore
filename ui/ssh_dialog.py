@@ -5,10 +5,13 @@ SSH connection dialog for wireless KOReader device connections
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QSpinBox, QMessageBox,
-    QFormLayout, QGroupBox
+    QFormLayout, QGroupBox, QPushButton
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from services.ssh_connection import SSHConnectionService
+from services.known_devices import KnownDevicesManager, KnownDevice
+from ui.known_devices_dialog import KnownDevicesDialog, AddDeviceDialog
+from ui.connection_diagnostics_dialog import ConnectionDiagnosticsDialog
 
 
 class SSHConnectWorker(QThread):
@@ -54,8 +57,9 @@ class SSHConnectionDialog(QDialog):
         super().__init__(parent)
         self.ssh_service = ssh_service
         self.worker = None
+        self.devices_manager = KnownDevicesManager()
         self.setWindowTitle("Connect via WiFi (SFTP)")
-        self.setMinimumWidth(380)
+        self.setMinimumWidth(420)
         self._build_ui()
 
     def _build_ui(self):
@@ -99,6 +103,32 @@ class SSHConnectionDialog(QDialog):
 
         layout.addWidget(group)
 
+        # Quick connect buttons for known devices
+        quick_group = QGroupBox("Quick Connect")
+        quick_layout = QVBoxLayout(quick_group)
+        
+        self.known_devices_btn = QPushButton("Known Devices")
+        self.known_devices_btn.clicked.connect(self._on_known_devices)
+        quick_layout.addWidget(self.known_devices_btn)
+        
+        self.diagnostics_btn = QPushButton("Connection Test")
+        self.diagnostics_btn.clicked.connect(self._on_diagnostics)
+        quick_layout.addWidget(self.diagnostics_btn)
+        
+        # Show recent devices if any
+        recent_devices = self.devices_manager.get_recent_devices(3)
+        if recent_devices:
+            recent_label = QLabel("Recent devices:")
+            recent_label.setWordWrap(True)
+            quick_layout.addWidget(recent_label)
+            
+            for device in recent_devices:
+                btn = QPushButton(f"{device.name} ({device.host})")
+                btn.clicked.connect(lambda checked, d=device: self._on_quick_connect(d))
+                quick_layout.addWidget(btn)
+        
+        layout.addWidget(quick_group)
+
         # Status label
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
@@ -136,9 +166,68 @@ class SSHConnectionDialog(QDialog):
         self.worker.start()
 
     def _on_success(self, koreader_path: str):
+        # Save successful connection to known devices
+        device = KnownDevice(
+            name=f"Device {self.host_input.text()}",
+            host=self.host_input.text().strip(),
+            port=self.port_input.value(),
+            user=self.user_input.text().strip(),
+            remote_path=self.remote_path_input.text().strip()
+        )
+        self.devices_manager.add_device(device)
+        
         self.connected.emit(koreader_path)
         self.accept()
 
     def _on_error(self, message: str):
         self.status_label.setText(f"Error: {message}")
         self.connect_btn.setEnabled(True)
+
+    def _on_known_devices(self):
+        """Handle known devices button click."""
+        dialog = KnownDevicesDialog(self.devices_manager, self)
+        dialog.device_selected.connect(self._on_device_selected)
+        dialog.connect_new.connect(self._on_add_new_device)
+        dialog.exec()
+    
+    def _on_device_selected(self, device: KnownDevice):
+        """Handle device selection from known devices."""
+        # Fill the form with device details
+        self.host_input.setText(device.host)
+        self.port_input.setValue(device.port)
+        self.user_input.setText(device.user)
+        self.remote_path_input.setText(device.remote_path)
+        self.password_input.clear()  # Don't store passwords
+    
+    def _on_add_new_device(self):
+        """Handle add new device request."""
+        dialog = AddDeviceDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            device = dialog.get_device()
+            if device:
+                self.devices_manager.add_device(device)
+                # Fill the form with new device details
+                self.host_input.setText(device.host)
+                self.port_input.setValue(device.port)
+                self.user_input.setText(device.user)
+                self.remote_path_input.setText(device.remote_path)
+    
+    def _on_quick_connect(self, device: KnownDevice):
+        """Handle quick connect button click."""
+        self.host_input.setText(device.host)
+        self.port_input.setValue(device.port)
+        self.user_input.setText(device.user)
+        self.remote_path_input.setText(device.remote_path)
+        self.password_input.clear()
+        # Auto-connect
+        self._on_connect()
+
+    def _on_diagnostics(self):
+        """Handle diagnostics button click."""
+        dialog = ConnectionDiagnosticsDialog(self)
+        dialog.set_connection_info(
+            self.host_input.text().strip(),
+            self.port_input.value(),
+            self.user_input.text().strip()
+        )
+        dialog.exec()
