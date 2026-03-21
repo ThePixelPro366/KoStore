@@ -93,12 +93,6 @@ koreader_store/
 - **patch_selection_dialog.py**: Dialog for selecting and managing patches
 - **readme_text_edit.py**: Custom text editor widget for displaying README content
 - **ssh_dialog.py**: Dialog for SSH connection configuration
-<<<<<<< HEAD
-
-### API Layer (`api/`)
-- Currently empty - API integrations are handled within services
-=======
->>>>>>> 3f3c184a86227540542fbe3a6bce21cf7e22d46e
 
 ### Workers (`workers/`)
 - **download_worker.py**: Background thread for downloading and installing plugins
