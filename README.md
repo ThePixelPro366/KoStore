@@ -32,7 +32,6 @@ koreader_store/
     ├── markdown.py        # Markdown to HTML conversion
     └── versioning.py     # Version comparison utilities
 ```
-**Many buttons and actions may take some time to respond. Please be patient — even if it says “Not Responding,” just click “Wait.”**
 ## Features
 
 - **Plugin Management**: Browse, install, and update KOReader plugins
