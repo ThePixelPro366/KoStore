@@ -100,9 +100,9 @@ class PluginRequirements:
                 req.supported_platforms = [p.strip().strip('"\'') for p in platforms_str.split(',')]
             
             # Parse hardware requirements
-            req.requires_touchscreen = 'requires_touchscreen\s*=\s*true' in metadata_content
-            req.requires_keyboard = 'requires_keyboard\s*=\s*true' in metadata_content
-            req.requires_physical_buttons = 'requires_physical_buttons\s*=\s*true' in metadata_content
+            req.requires_touchscreen = bool(re.search(r'requires_touchscreen\s*=\s*true', metadata_content))
+            req.requires_keyboard = bool(re.search(r'requires_keyboard\s*=\s*true', metadata_content))
+            req.requires_physical_buttons = bool(re.search(r'requires_physical_buttons\s*=\s*true', metadata_content))
             
             # Parse screen size requirements
             width_match = re.search(r'min_screen_width\s*=\s*(\d+)', metadata_content)
