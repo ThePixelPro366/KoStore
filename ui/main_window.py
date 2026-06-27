@@ -205,6 +205,9 @@ from ui.progress_dialog import TransferProgressDialog as ProgressDialog
 from ui.known_devices_dialog import KnownDevicesDialog
 from ui.connection_diagnostics_dialog import ConnectionDiagnosticsDialog
 from ui.operations_manager_dialog import OperationsManagerDialog
+from ui.ssh_dialog import SSHConnectionDialog
+from ui.patch_selection_dialog import PatchSelectionDialog
+from ui.readme_text_edit import ReadmeTextEdit
 
 from workers.workers import DownloadWorker, DataFetchWorker, DeviceDetectionWorker
 
