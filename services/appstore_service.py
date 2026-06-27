@@ -280,6 +280,34 @@ class AppStoreService:
             logger.warning("GitHub contents decode error: %s", e)
             return []
 
+    def get_patch_files(self, owner: str, repo: str) -> List[Dict[str, Any]]:
+        """
+        List the installable patch files in a patch repository.
+
+        Walks the repository contents and returns files that look like
+        patches (``.patch``/``.diff``/``.lua``/``.sh`` extensions or "patch"
+        in the name), each as a dict with ``name``, ``path`` and
+        ``download_url`` ready for direct download.
+        """
+        patch_extensions = (".patch", ".diff", ".lua", ".sh")
+        contents = self.get_repository_contents(owner, repo)
+
+        files: List[Dict[str, Any]] = []
+        for item in contents:
+            if item.get("type") != "file":
+                continue
+            name = item.get("name", "")
+            lower = name.lower()
+            if lower.endswith(patch_extensions) or "patch" in lower:
+                files.append({
+                    "name": name,
+                    "path": item.get("path", name),
+                    "download_url": item.get("download_url"),
+                })
+
+        logger.info("Found %d patch file(s) in %s/%s", len(files), owner, repo)
+        return files
+
     def download_repository_zip(
         self,
         owner: str,
