@@ -44,7 +44,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r BuildRequirements.txt
 
-      # 4️⃣ Build with PyInstaller
+      # 4️⃣ Stamp APP_VERSION so the frozen binary knows its own release tag
+      - name: Stamp version
+        shell: bash
+        run: echo 'APP_VERSION = "${{ env.RELEASE_TAG }}"' > version.py
+
+      # 5️⃣ Build with PyInstaller
       - name: Build with PyInstaller
         shell: bash
         run: |
@@ -56,7 +61,7 @@ jobs:
             pyinstaller build.spec
           fi
 
-      # 5️⃣ Zip build output (OS-safe)
+      # 6️⃣ Zip build output (OS-safe)
       - name: Zip result
         shell: bash
         run: |
@@ -73,7 +78,7 @@ jobs:
             zip -r "$ZIP_NAME" *
           fi
 
-      # 6️⃣ Create GitHub Release (DRAFT / privat)
+      # 7️⃣ Create GitHub Release (DRAFT / privat)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
