@@ -375,3 +375,55 @@ class AppStoreService:
         # No releases — fall back to HEAD
         logger.info("No releases found for %s/%s, downloading HEAD", owner, repo)
         return self.download_repository_zip(owner, repo, timeout=timeout)
+
+    def get_latest_release(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for the latest GitHub release of a repository.
+
+        Returns the parsed release object (with ``tag_name``, ``body``,
+        ``published_at``, ``assets`` …), or ``None`` if the repository has
+        no releases or the request fails.
+        """
+        code, body = self._request(f"/repos/{owner}/{repo}/releases/latest")
+        if code != 200:
+            logger.debug("No latest release for %s/%s (HTTP %s)", owner, repo, code)
+            return None
+        try:
+            return json.loads(body)
+        except Exception as e:
+            logger.warning("GitHub release decode error %s/%s: %s", owner, repo, e)
+            return None
+
+    def get_repository_commits(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
+        """
+        Get information about the most recent commit on a repository.
+
+        Returns a dict with ``latest_commit`` (SHA) and ``latest_commit_date``
+        (ISO 8601 string), or ``None`` if no commits are found or the request
+        fails.
+        """
+        code, body = self._request(f"/repos/{owner}/{repo}/commits", query="per_page=1")
+        if code != 200:
+            logger.debug("Could not fetch commits for %s/%s (HTTP %s)", owner, repo, code)
+            return None
+        try:
+            commits = json.loads(body)
+        except Exception as e:
+            logger.warning("GitHub commits decode error %s/%s: %s", owner, repo, e)
+            return None
+
+        if not commits or not isinstance(commits, list):
+            return None
+
+        latest = commits[0]
+        commit_date = (
+            latest.get("commit", {}).get("committer", {}).get("date")
+            or latest.get("commit", {}).get("author", {}).get("date")
+        )
+        if not commit_date:
+            return None
+
+        return {
+            "latest_commit": latest.get("sha", ""),
+            "latest_commit_date": commit_date,
+        }
