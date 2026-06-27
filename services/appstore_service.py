@@ -129,7 +129,11 @@ class AppStoreService:
                 }
                 response, err = self.search_repositories(request_opts)
                 if not response:
-                    body = err and err.get("body") if isinstance(err, dict) else err
+                    # GitHub caps search results at 1000; treat 422 as end of pagination
+                    if isinstance(err, dict) and err.get("code") == 422:
+                        logger.warning("%s query hit GitHub 1000-result cap (%s), stopping pagination", kind_label, query)
+                        break
+                    body = err.get("body") if isinstance(err, dict) else err
                     raise RuntimeError(f"{kind_label} query failed ({query}): {body}")
                 items = response.get("items", [])
                 if not items:
@@ -187,7 +191,11 @@ class AppStoreService:
                 }
                 response, err = self.search_repositories(request_opts)
                 if not response:
-                    body = err and err.get("body") if isinstance(err, dict) else err
+                    # GitHub caps search results at 1000; treat 422 as end of pagination
+                    if isinstance(err, dict) and err.get("code") == 422:
+                        logger.warning("%s topic search hit GitHub 1000-result cap, stopping pagination", label)
+                        break
+                    body = err.get("body") if isinstance(err, dict) else err
                     raise RuntimeError(f"{label} topic search failed ({topic_query}): {body}")
                 items = response.get("items", [])
                 if not items:
