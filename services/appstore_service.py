@@ -8,6 +8,7 @@ import requests
 import json
 import urllib.parse
 import logging
+from utils.versioning import is_newer_version
 import time
 
 logger = logging.getLogger(__name__)
@@ -455,3 +456,30 @@ class AppStoreService:
             "latest_commit": latest.get("sha", ""),
             "latest_commit_date": commit_date,
         }
+
+    def check_app_update(self, current_version: str) -> Optional[Dict[str, Any]]:
+        """
+        Check whether a newer KoStore release is available on GitHub.
+
+        Returns a dict with ``latest_version`` and ``html_url`` when an
+        update is available, or ``None`` when already up-to-date or when the
+        check fails.
+        """
+        release = self.get_latest_release("ThePixelPro366", "KoStore")
+        if not release:
+            logger.debug("App update check: no release info returned")
+            return None
+        latest_tag = release.get("tag_name", "")
+        if not latest_tag:
+            return None
+        if is_newer_version(current_version, latest_tag):
+            logger.info("App update available: %s -> %s", current_version, latest_tag)
+            return {
+                "latest_version": latest_tag,
+                "html_url": release.get(
+                    "html_url",
+                    "https://github.com/ThePixelPro366/KoStore/releases",
+                ),
+            }
+        logger.debug("App update check: already up-to-date (%s)", current_version)
+        return None

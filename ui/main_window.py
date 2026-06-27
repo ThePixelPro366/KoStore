@@ -209,7 +209,8 @@ from ui.ssh_dialog import SSHConnectionDialog
 from ui.patch_selection_dialog import PatchSelectionDialog
 from ui.readme_text_edit import ReadmeTextEdit
 
-from workers.workers import DownloadWorker, DataFetchWorker, DeviceDetectionWorker
+from workers.workers import DownloadWorker, DataFetchWorker, DeviceDetectionWorker, AppUpdateWorker
+from version import APP_VERSION
 
 from services.device_detection import DeviceDetection
 from services.plugin_installer import PluginInstaller
@@ -356,6 +357,9 @@ class KOReaderStore(QMainWindow):
 
             self._end_loading()
 
+            # Check for a newer KoStore release (non-blocking)
+            QTimer.singleShot(2000, self._check_app_self_update)
+
             
 
         except Exception as e:
@@ -452,7 +456,15 @@ class KOReaderStore(QMainWindow):
 
         main_layout.addWidget(header)
 
-        
+
+
+        # Update notification banner (hidden until an update is found)
+
+        self._update_banner = self._create_update_banner()
+
+        main_layout.addWidget(self._update_banner)
+
+
 
         # Search & Filter Bar
 
@@ -513,6 +525,84 @@ class KOReaderStore(QMainWindow):
         logger.info("UI initialization completed")
 
     
+
+    def _create_update_banner(self):
+        """Create the update-available notification banner (initially hidden)."""
+        banner = QFrame()
+        banner.setObjectName("updateBanner")
+        banner.setStyleSheet("""
+            QFrame#updateBanner {
+                background-color: #fffbeb;
+                border: 1px solid #fcd34d;
+                border-radius: 10px;
+                padding: 4px 12px;
+            }
+        """)
+        banner_layout = QHBoxLayout(banner)
+        banner_layout.setContentsMargins(12, 6, 12, 6)
+
+        self._update_banner_label = QLabel()
+        self._update_banner_label.setStyleSheet("color: #92400e; font-size: 13px;")
+        self._update_banner_label.setOpenExternalLinks(False)
+        banner_layout.addWidget(self._update_banner_label)
+
+        banner_layout.addStretch()
+
+        download_btn = QPushButton("Download")
+        download_btn.setObjectName("updateDownloadBtn")
+        download_btn.setStyleSheet("""
+            QPushButton#updateDownloadBtn {
+                background-color: #f59e0b;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 4px 14px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton#updateDownloadBtn:hover {
+                background-color: #d97706;
+            }
+        """)
+        download_btn.clicked.connect(self._open_update_url)
+        banner_layout.addWidget(download_btn)
+
+        dismiss_btn = QPushButton("✕")
+        dismiss_btn.setFixedSize(24, 24)
+        dismiss_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #92400e;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { color: #78350f; }
+        """)
+        dismiss_btn.clicked.connect(banner.hide)
+        banner_layout.addWidget(dismiss_btn)
+
+        banner.hide()
+        return banner
+
+    def _check_app_self_update(self):
+        """Start background check for a newer KoStore release."""
+        self._app_update_worker = AppUpdateWorker(self.appstore_service, APP_VERSION)
+        self._app_update_worker.finished.connect(self._on_app_update_checked)
+        self._app_update_worker.start()
+
+    def _on_app_update_checked(self, has_update: bool, latest_version: str, html_url: str):
+        if not has_update:
+            return
+        self._update_url = html_url
+        self._update_banner_label.setText(
+            f"🎉 KoStore {latest_version} is available! (current: {APP_VERSION})"
+        )
+        self._update_banner.show()
+
+    def _open_update_url(self):
+        url = getattr(self, "_update_url", "https://github.com/ThePixelPro366/KoStore/releases")
+        QDesktopServices.openUrl(QUrl(url))
 
     def create_header(self):
 

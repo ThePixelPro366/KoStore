@@ -68,6 +68,29 @@ class DeviceDetectionWorker(QThread):
             self.finished.emit(None, str(exc))
 
 
+class AppUpdateWorker(QThread):
+    """Background worker that checks for a newer KoStore release on GitHub."""
+
+    # Emits (has_update, latest_version, html_url)
+    finished = pyqtSignal(bool, str, str)
+
+    def __init__(self, appstore_service: Any, current_version: str):
+        super().__init__()
+        self._appstore_service = appstore_service
+        self._current_version = current_version
+
+    def run(self):
+        try:
+            result = self._appstore_service.check_app_update(self._current_version)
+            if result:
+                self.finished.emit(True, result["latest_version"], result["html_url"])
+            else:
+                self.finished.emit(False, "", "")
+        except Exception as exc:
+            logger.warning("App update check failed: %s", exc)
+            self.finished.emit(False, "", "")
+
+
 def find_plugin_root(base: Path) -> Path | None:
     """Find the root directory of a plugin within the given base path."""
     if (base / "main.lua").exists() and (base / "_meta.lua").exists():
