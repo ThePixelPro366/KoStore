@@ -11,6 +11,8 @@ from typing import Any
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from utils.plugin_naming import derive_plugin_folder_name
+
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +157,9 @@ class DownloadWorker(QThread):
                     )
                     return
 
-                plugin_name = plugin_dir.name
-                if not plugin_name.endswith(".koplugin"):
-                    plugin_name += ".koplugin"
+                # Derive a stable folder name from the repo, not the
+                # zipball root (which is "<owner>-<repo>-<sha>").
+                plugin_name = derive_plugin_folder_name(plugin_dir.name, repo)
 
                 self.progress.emit("Installing...")
 

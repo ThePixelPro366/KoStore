@@ -18,6 +18,8 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from utils.plugin_naming import derive_plugin_folder_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,9 +102,9 @@ class PluginInstaller:
                 )
                 return result
 
-            plugin_name = plugin_dir.name
-            if not plugin_name.endswith(".koplugin"):
-                plugin_name = f"{plugin_name}.koplugin"
+            # Derive a stable folder name from the repo, not the zipball
+            # root (which is "<owner>-<repo>-<sha>").
+            plugin_name = derive_plugin_folder_name(plugin_dir.name, repo_name)
 
             dest = f"{self.plugins_path}/{plugin_name}"
 
