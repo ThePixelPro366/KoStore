@@ -115,13 +115,16 @@ class DownloadWorker(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, api, item_data, install_path, item_type="plugin", is_update=False):
+    def __init__(self, api, item_data, install_path, item_type="plugin", is_update=False, installer=None):
         super().__init__()
         self.api = api
         self.item_data = item_data
         self.install_path = install_path
         self.item_type = item_type
         self.is_update = is_update
+        # PluginInstaller handles both SFTP (SSH) and local filesystem writes.
+        # When present, use it so remote installs don't hit the local disk.
+        self.installer = installer
 
     def run(self):
         try:
@@ -136,6 +139,22 @@ class DownloadWorker(QThread):
                     self.finished.emit(False, "Failed to download repository")
                     return
 
+                self.progress.emit("Installing...")
+
+                if self.installer is not None:
+                    result = self.installer.install_plugin_from_zip(
+                        zip_content,
+                        repo,
+                        progress_callback=self._emit_upload_progress,
+                    )
+                    if result["success"]:
+                        verb = "updated" if self.is_update else "installed"
+                        self.finished.emit(True, f"{repo} {verb} successfully!")
+                    else:
+                        self.finished.emit(False, result["message"])
+                    return
+
+                # Fallback: no installer supplied — write to a local path.
                 temp_dir = Path(tempfile.mkdtemp(prefix="koreader_store_"))
                 zip_path = temp_dir / f"{repo}.zip"
 
@@ -161,8 +180,6 @@ class DownloadWorker(QThread):
                 # zipball root (which is "<owner>-<repo>-<sha>").
                 plugin_name = derive_plugin_folder_name(plugin_dir.name, repo)
 
-                self.progress.emit("Installing...")
-
                 target = Path(self.install_path) / "plugins" / plugin_name
                 if target.exists():
                     shutil.rmtree(target)
@@ -177,20 +194,31 @@ class DownloadWorker(QThread):
 
             elif self.item_type == "patch":
                 patches = self.api.get_patch_files(owner, repo)
-                if patches:
-                    self.progress.emit("Downloading patches...")
-                    patch_dir = Path(self.install_path) / "patches"
-                    patch_dir.mkdir(exist_ok=True)
-
-                    for patch in patches:
-                        response = requests.get(patch["download_url"], timeout=10)
-                        patch_file = patch_dir / patch["name"]
-                        with open(patch_file, "w", encoding="utf-8") as f:
-                            f.write(response.text)
-
-                    self.finished.emit(True, f"{len(patches)} patch(es) installed!")
-                else:
+                if not patches:
                     self.finished.emit(False, "No patches found")
+                    return
+
+                self.progress.emit("Downloading patches...")
+
+                if self.installer is not None:
+                    result = self.installer.install_patches(patches)
+                    if result["success"]:
+                        self.finished.emit(True, result["message"])
+                    else:
+                        self.finished.emit(False, result["message"])
+                    return
+
+                # Fallback: no installer supplied — write to a local path.
+                patch_dir = Path(self.install_path) / "patches"
+                patch_dir.mkdir(exist_ok=True)
+
+                for patch in patches:
+                    response = requests.get(patch["download_url"], timeout=10)
+                    patch_file = patch_dir / patch["name"]
+                    with open(patch_file, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+
+                self.finished.emit(True, f"{len(patches)} patch(es) installed!")
 
         except Exception as e:
             logger.error(f"Error during installation: {e}")
@@ -204,3 +232,7 @@ class DownloadWorker(QThread):
                     logger.warning(
                         f"Failed to cleanup temporary directory {temp_dir}: {cleanup_error}"
                     )
+
+    def _emit_upload_progress(self, done, total):
+        """Relay per-file install progress to the progress dialog."""
+        self.progress.emit(f"Installing... ({done}/{total})")

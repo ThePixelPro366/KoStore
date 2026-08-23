@@ -1811,7 +1811,7 @@ border: 1px solid #fecaca;
 
         # Start download worker
 
-        self.worker = DownloadWorker(self.api, data, str(self.koreader_path), "plugin", is_update)
+        self.worker = DownloadWorker(self.api, data, str(self.koreader_path), "plugin", is_update, installer=self.plugin_installer)
 
         
 
