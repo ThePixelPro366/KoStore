@@ -391,9 +391,8 @@ class PluginInstaller:
                 return False
             
             # Count files to ensure everything uploaded
-            local_files = sum(1 for _ in local_path.rglob("*") if _.is_file())
-            remote_files = sum(1 for _ in self._ssh.walk(remote_path) 
-                             for _ in _[2] if self._ssh.exists(f"{_[0]}/{_}"))
+            local_files = sum(1 for p in local_path.rglob("*") if p.is_file())
+            remote_files = sum(len(filenames) for _, _, filenames in self._ssh.walk(remote_path))
             
             if local_files != remote_files:
                 logger.error(f"Verification failed: file count mismatch (local: {local_files}, remote: {remote_files})")
